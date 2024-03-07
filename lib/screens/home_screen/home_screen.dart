@@ -103,6 +103,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                                       .docs[index]['email'],
                                                   id: streamSnapshot
                                                       .data!.docs[index]['id'],
+                                                  imageURL: streamSnapshot.data!
+                                                      .docs[index]['imageURL'],
                                                 )));
                                   },
                                   child: Icon(

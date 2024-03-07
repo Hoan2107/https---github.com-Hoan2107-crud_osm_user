@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart' as firebase;
 import 'package:flutter/material.dart';
 import 'package:flutter_osm_plugin/flutter_osm_plugin.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class SendOrUpdateData extends StatefulWidget {
   final String name;
@@ -11,6 +14,7 @@ class SendOrUpdateData extends StatefulWidget {
   final String id;
   final String lat;
   final String long;
+  final String imageURL;
 
   const SendOrUpdateData({
     this.name = '',
@@ -19,6 +23,7 @@ class SendOrUpdateData extends StatefulWidget {
     this.id = '',
     this.lat = '',
     this.long = '',
+    this.imageURL = '',
   });
 
   @override
@@ -30,7 +35,8 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
   TextEditingController ageController = TextEditingController();
   TextEditingController emailController = TextEditingController();
   TextEditingController locationController = TextEditingController();
-
+  File? _image;
+  final ImagePicker _picker = ImagePicker();
   bool showProgressIndicator = false;
 
   MapController mapController = MapController.withUserPosition(
@@ -92,6 +98,22 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
     } else {}
   }
 
+  Future<void> _getImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _image = File(pickedFile.path);
+      });
+    }
+  }
+
+  void _removeImage() {
+    setState(() {
+      _image = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -135,6 +157,64 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
               controller: emailController,
               decoration: InputDecoration(hintText: 'Email'),
             ),
+            SizedBox(height: 20),
+            _image != null
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ảnh',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      SizedBox(height: 10),
+                      Image.file(_image!, height: 100),
+                      SizedBox(height: 10),
+                      Row(
+                        children: [
+                          ElevatedButton(
+                            onPressed: _getImage,
+                            child: Text('Chọn ảnh mới'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  )
+                : widget.imageURL.isNotEmpty
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ảnh',
+                            style: TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          SizedBox(height: 10),
+                          Image.network(
+                            widget.imageURL,
+                            height: 100,
+                          ),
+                          SizedBox(height: 10),
+                          Row(
+                            children: [
+                              ElevatedButton(
+                                onPressed: _getImage,
+                                child: Text('Chọn ảnh mới'),
+                              ),
+                              /*
+                              SizedBox(width: 10),
+                              ElevatedButton(
+                                onPressed: _removeImage,
+                                style: ElevatedButton.styleFrom(),
+                                child: Text('Xóa ảnh cũ'),
+                              ),
+                              */
+                            ],
+                          ),
+                        ],
+                      )
+                    : ElevatedButton(
+                        onPressed: _getImage,
+                        child: Text('Chọn ảnh'),
+                      ),
             SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -238,7 +318,7 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
         ageController.text.isEmpty ||
         emailController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Fill in all fields')),
+        SnackBar(content: Text('Hãy điền đầy đủ thông tin')),
       );
     } else {
       final dUser = firebase.FirebaseFirestore.instance
@@ -262,6 +342,23 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
         'location': locations,
         'id': docID,
       };
+
+      final newImageURL = await _updateImage(_image, docID);
+      if (newImageURL != null) {
+        jsonData['imageURL'] = newImageURL;
+      }
+
+      if (_image != null) {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('user_images')
+            .child(docID + '.jpg');
+
+        await storageRef.putFile(_image!);
+
+        final imageURL = await storageRef.getDownloadURL();
+        jsonData['imageURL'] = imageURL;
+      }
       showProgressIndicator = true;
       if (widget.id.isEmpty) {
         await dUser.set(jsonData).then((value) {
@@ -269,6 +366,7 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
           ageController.text = '';
           emailController.text = '';
           locationController.text = '';
+          _image = null;
           showProgressIndicator = false;
           setState(() {});
         });
@@ -284,4 +382,25 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
       }
     }
   }
+}
+
+Future<String?> _updateImage(File? newImage, String docID) async {
+  if (newImage != null) {
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('user_images')
+          .child(docID + '.jpg');
+
+      await storageRef.putFile(newImage);
+
+      final imageURL = await storageRef.getDownloadURL();
+      return imageURL;
+    } catch (e) {
+      print('Lỗi khi cập nhật ảnh lên Storage: $e');
+      return null;
+    }
+  }
+
+  return null;
 }
