@@ -114,6 +114,26 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
     });
   }
 
+  Future<void> _deleteImage(String docID) async {
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('user_images')
+          .child(docID + '.jpg');
+
+      await storageRef.delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Image deleted successfully')),
+      );
+    } catch (e) {
+      print('Error deleting image from Storage: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting image')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -199,14 +219,14 @@ class _SendOrUpdateDataState extends State<SendOrUpdateData> {
                                 onPressed: _getImage,
                                 child: Text('Chọn ảnh mới'),
                               ),
-                              /*
                               SizedBox(width: 10),
                               ElevatedButton(
-                                onPressed: _removeImage,
+                                onPressed: () {
+                                  _deleteImage(widget.id);
+                                },
                                 style: ElevatedButton.styleFrom(),
-                                child: Text('Xóa ảnh cũ'),
+                                child: Text('Xóa Url ảnh cũ'),
                               ),
-                              */
                             ],
                           ),
                         ],
